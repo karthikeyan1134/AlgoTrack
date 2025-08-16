@@ -1,5 +1,9 @@
-import { createClient } from "@/lib/supabase/server"
-import { redirect } from "next/navigation"
+"use client" // Added client directive to fix server-client component mismatch
+
+import { createClient } from "@/lib/supabase/client" // Changed to client-side Supabase client
+import { useRouter } from "next/navigation" // Changed to client-side navigation
+import { useEffect, useState } from "react" // Added React hooks for client-side auth check
+import type { User } from "@supabase/supabase-js"
 import DashboardSidebar from "@/components/dashboard-sidebar"
 import DashboardStats from "@/components/dashboard-stats"
 import RecentSubmissions from "@/components/recent-submissions"
@@ -9,14 +13,43 @@ import SyncStatusCard from "@/components/sync-status-card"
 import LiveDashboardWrapper from "@/components/live-dashboard-wrapper"
 import DashboardActivityFeed from "@/components/dashboard-activity-feed"
 
-export default async function DashboardPage() {
+export default function DashboardPage() {
+  const [user, setUser] = useState<User | null>(null)
+  const [loading, setLoading] = useState(true)
+  const router = useRouter()
   const supabase = createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+
+  useEffect(() => {
+    const checkUser = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+
+      if (!user) {
+        router.push("/auth/login")
+        return
+      }
+
+      setUser(user)
+      setLoading(false)
+    }
+
+    checkUser()
+  }, [router, supabase.auth])
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-2 text-gray-600">Loading...</p>
+        </div>
+      </div>
+    )
+  }
 
   if (!user) {
-    redirect("/auth/login")
+    return null // Will redirect to login
   }
 
   return (
