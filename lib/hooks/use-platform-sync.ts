@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { createClient } from "@/lib/supabase/client"
+import { useAuth } from "@/contexts/AuthContext"
 
 interface SyncStatus {
   platform_id: number
@@ -26,21 +27,23 @@ export function usePlatformSync() {
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
 
+  const { user } = useAuth()
   const supabase = createClient()
 
   useEffect(() => {
-    fetchSyncStatuses()
-    fetchConnections()
-    setupRealtimeSubscription()
-  }, [])
+    if (user) {
+      fetchSyncStatuses()
+      fetchConnections()
+      setupRealtimeSubscription()
+    } else {
+      setLoading(false)
+    }
+  }, [user])
 
   const fetchSyncStatuses = async () => {
-    try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-      if (!user) return
+    if (!user) return
 
+    try {
       const { data, error } = await supabase
         .from("sync_status")
         .select(`
@@ -62,12 +65,9 @@ export function usePlatformSync() {
   }
 
   const fetchConnections = async () => {
-    try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-      if (!user) return
+    if (!user) return
 
+    try {
       const { data, error } = await supabase
         .from("user_platforms")
         .select(`
@@ -95,34 +95,28 @@ export function usePlatformSync() {
   }
 
   const setupRealtimeSubscription = () => {
-    const {
-      data: { user },
-    } = supabase.auth.getUser()
+    if (!user) return
 
-    user.then(({ user }) => {
-      if (!user) return
+    const subscription = supabase
+      .channel("sync_status_changes")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "sync_status",
+          filter: `user_id=eq.${user.id}`,
+        },
+        (payload) => {
+          console.log("[v0] Sync status updated:", payload)
+          fetchSyncStatuses()
+        },
+      )
+      .subscribe()
 
-      const subscription = supabase
-        .channel("sync_status_changes")
-        .on(
-          "postgres_changes",
-          {
-            event: "*",
-            schema: "public",
-            table: "sync_status",
-            filter: `user_id=eq.${user.id}`,
-          },
-          (payload) => {
-            console.log("[v0] Sync status updated:", payload)
-            fetchSyncStatuses()
-          },
-        )
-        .subscribe()
-
-      return () => {
-        subscription.unsubscribe()
-      }
-    })
+    return () => {
+      subscription.unsubscribe()
+    }
   }
 
   const syncPlatform = useCallback(async (platform: string, username: string) => {
