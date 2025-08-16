@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { createClient } from "@/lib/supabase/client"
+import { useAuth } from "@/contexts/AuthContext"
 
 interface UserStats {
   totalSubmissions: number
@@ -20,36 +21,34 @@ export function useUserStats() {
   const [stats, setStats] = useState<UserStats | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const { user, loading: authLoading } = useAuth()
 
   useEffect(() => {
-    fetchUserStats()
-  }, [])
+    if (!authLoading && user) {
+      fetchUserStats()
+    } else if (!authLoading && !user) {
+      setLoading(false)
+      setError("User not authenticated")
+    }
+  }, [user, authLoading])
 
   const fetchUserStats = async () => {
+    if (!user) {
+      setError("User not authenticated")
+      setLoading(false)
+      return
+    }
+
     try {
       setLoading(true)
-      setError(null) // Reset error state on retry
+      setError(null)
       const supabase = createClient()
-
-      // Get current user
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser()
-
-      if (userError) {
-        throw new Error(`Authentication error: ${userError.message}`)
-      }
-
-      if (!user) {
-        throw new Error("User not authenticated")
-      }
 
       const { data: userStats, error: statsError } = await supabase
         .from("user_statistics")
         .select("*")
         .eq("user_id", user.id)
-        .maybeSingle() // Use maybeSingle instead of single to handle no records
+        .maybeSingle()
 
       if (statsError) {
         console.error("Stats query error:", statsError)
@@ -81,7 +80,6 @@ export function useUserStats() {
 
         if (createError) {
           console.error("Error creating user stats:", createError)
-          // Continue with default values instead of throwing
           finalUserStats = null
         } else {
           finalUserStats = newStats

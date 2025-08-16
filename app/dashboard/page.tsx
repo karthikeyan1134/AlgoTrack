@@ -1,9 +1,8 @@
-"use client" // Added client directive to fix server-client component mismatch
+"use client"
 
-import { createClient } from "@/lib/supabase/client" // Changed to client-side Supabase client
-import { useRouter } from "next/navigation" // Changed to client-side navigation
-import { useEffect, useState } from "react" // Added React hooks for client-side auth check
-import type { User } from "@supabase/supabase-js"
+import { useAuth } from "@/contexts/AuthContext"
+import { useRouter } from "next/navigation"
+import { useEffect } from "react"
 import DashboardSidebar from "@/components/dashboard-sidebar"
 import DashboardStats from "@/components/dashboard-stats"
 import RecentSubmissions from "@/components/recent-submissions"
@@ -14,67 +13,14 @@ import LiveDashboardWrapper from "@/components/live-dashboard-wrapper"
 import DashboardActivityFeed from "@/components/dashboard-activity-feed"
 
 export default function DashboardPage() {
-  const [user, setUser] = useState<User | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null) // Added error state
+  const { user, loading, error } = useAuth()
   const router = useRouter()
-  const supabase = createClient()
 
   useEffect(() => {
-    let isMounted = true // Prevent state updates on unmounted component
-
-    const checkUser = async () => {
-      try {
-        setError(null) // Reset error state
-        const {
-          data: { user },
-          error: userError,
-        } = await supabase.auth.getUser()
-
-        if (userError) {
-          throw new Error(`Authentication error: ${userError.message}`)
-        }
-
-        if (!user && isMounted) {
-          router.push("/auth/login")
-          return
-        }
-
-        if (isMounted) {
-          setUser(user)
-          setLoading(false)
-        }
-      } catch (err) {
-        console.error("Dashboard auth error:", err)
-        if (isMounted) {
-          setError(err instanceof Error ? err.message : "Authentication failed")
-          setLoading(false)
-        }
-      }
+    if (!loading && !user) {
+      router.push("/auth/login")
     }
-
-    checkUser()
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (isMounted) {
-        if (session?.user) {
-          setUser(session.user)
-          setError(null)
-        } else {
-          setUser(null)
-          router.push("/auth/login")
-        }
-        setLoading(false)
-      }
-    })
-
-    return () => {
-      isMounted = false
-      subscription?.unsubscribe()
-    }
-  }, [router, supabase.auth])
+  }, [user, loading, router])
 
   if (error) {
     return (
@@ -145,7 +91,6 @@ export default function DashboardPage() {
               {/* Right column */}
               <div className="space-y-8">
                 <UpcomingContests />
-                {/* Dashboard Activity Feed */}
                 <DashboardActivityFeed />
               </div>
             </div>
