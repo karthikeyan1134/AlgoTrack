@@ -16,33 +16,91 @@ import DashboardActivityFeed from "@/components/dashboard-activity-feed"
 export default function DashboardPage() {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null) // Added error state
   const router = useRouter()
   const supabase = createClient()
 
   useEffect(() => {
+    let isMounted = true // Prevent state updates on unmounted component
+
     const checkUser = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
+      try {
+        setError(null) // Reset error state
+        const {
+          data: { user },
+          error: userError,
+        } = await supabase.auth.getUser()
 
-      if (!user) {
-        router.push("/auth/login")
-        return
+        if (userError) {
+          throw new Error(`Authentication error: ${userError.message}`)
+        }
+
+        if (!user && isMounted) {
+          router.push("/auth/login")
+          return
+        }
+
+        if (isMounted) {
+          setUser(user)
+          setLoading(false)
+        }
+      } catch (err) {
+        console.error("Dashboard auth error:", err)
+        if (isMounted) {
+          setError(err instanceof Error ? err.message : "Authentication failed")
+          setLoading(false)
+        }
       }
-
-      setUser(user)
-      setLoading(false)
     }
 
     checkUser()
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (isMounted) {
+        if (session?.user) {
+          setUser(session.user)
+          setError(null)
+        } else {
+          setUser(null)
+          router.push("/auth/login")
+        }
+        setLoading(false)
+      }
+    })
+
+    return () => {
+      isMounted = false
+      subscription?.unsubscribe()
+    }
   }, [router, supabase.auth])
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-red-600 mb-4">
+            <p className="text-lg font-semibold">Authentication Error</p>
+            <p className="text-sm">{error}</p>
+          </div>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-2 text-gray-600">Loading...</p>
+          <p className="mt-2 text-gray-600">Loading dashboard...</p>
         </div>
       </div>
     )

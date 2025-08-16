@@ -28,46 +28,93 @@ export function useUserStats() {
   const fetchUserStats = async () => {
     try {
       setLoading(true)
+      setError(null) // Reset error state on retry
       const supabase = createClient()
 
       // Get current user
       const {
         data: { user },
+        error: userError,
       } = await supabase.auth.getUser()
-      if (!user) {
-        setError("User not authenticated")
-        return
+
+      if (userError) {
+        throw new Error(`Authentication error: ${userError.message}`)
       }
 
-      // Fetch user statistics
+      if (!user) {
+        throw new Error("User not authenticated")
+      }
+
       const { data: userStats, error: statsError } = await supabase
         .from("user_statistics")
         .select("*")
         .eq("user_id", user.id)
-        .single()
+        .maybeSingle() // Use maybeSingle instead of single to handle no records
 
-      if (statsError && statsError.code !== "PGRST116") {
-        throw statsError
+      if (statsError) {
+        console.error("Stats query error:", statsError)
+        throw new Error(`Failed to fetch user statistics: ${statsError.message}`)
       }
 
-      // Fetch total submissions count
-      const { count: submissionsCount } = await supabase
+      let finalUserStats = userStats
+      if (!userStats) {
+        console.log("No user stats found, creating initial record")
+        const { data: newStats, error: createError } = await supabase
+          .from("user_statistics")
+          .insert([
+            {
+              user_id: user.id,
+              total_problems_solved: 0,
+              easy_solved: 0,
+              medium_solved: 0,
+              hard_solved: 0,
+              current_streak: 0,
+              max_streak: 0,
+              current_rating: 0,
+              highest_rating: 0,
+              total_contest_participations: 0,
+              average_contest_rank: 0,
+            },
+          ])
+          .select()
+          .single()
+
+        if (createError) {
+          console.error("Error creating user stats:", createError)
+          // Continue with default values instead of throwing
+          finalUserStats = null
+        } else {
+          finalUserStats = newStats
+        }
+      }
+
+      const { count: submissionsCount, error: submissionsError } = await supabase
         .from("submissions")
         .select("*", { count: "exact", head: true })
         .eq("user_id", user.id)
 
-      // Fetch upcoming contests count
-      const { count: contestsCount } = await supabase
+      if (submissionsError) {
+        console.error("Submissions count error:", submissionsError)
+      }
+
+      const { count: contestsCount, error: contestsError } = await supabase
         .from("contests")
         .select("*", { count: "exact", head: true })
         .gte("start_time", new Date().toISOString())
 
-      // Get average execution time and favorite language
-      const { data: submissions } = await supabase
+      if (contestsError) {
+        console.error("Contests count error:", contestsError)
+      }
+
+      const { data: submissions, error: submissionsDataError } = await supabase
         .from("submissions")
         .select("execution_time, language")
         .eq("user_id", user.id)
         .not("execution_time", "is", null)
+
+      if (submissionsDataError) {
+        console.error("Submissions data error:", submissionsDataError)
+      }
 
       let averageTime = 0
       let favoriteLanguage = "Python"
@@ -92,19 +139,31 @@ export function useUserStats() {
 
       setStats({
         totalSubmissions: submissionsCount || 0,
-        contestRating: userStats?.current_rating || 0,
-        currentStreak: userStats?.current_streak || 0,
+        contestRating: finalUserStats?.current_rating || 0,
+        currentStreak: finalUserStats?.current_streak || 0,
         upcomingContests: contestsCount || 0,
-        totalSolved: userStats?.total_problems_solved || 0,
-        easySolved: userStats?.easy_solved || 0,
-        mediumSolved: userStats?.medium_solved || 0,
-        hardSolved: userStats?.hard_solved || 0,
+        totalSolved: finalUserStats?.total_problems_solved || 0,
+        easySolved: finalUserStats?.easy_solved || 0,
+        mediumSolved: finalUserStats?.medium_solved || 0,
+        hardSolved: finalUserStats?.hard_solved || 0,
         averageTime,
         favoriteLanguage,
       })
     } catch (err) {
       console.error("Error fetching user stats:", err)
       setError(err instanceof Error ? err.message : "Failed to fetch stats")
+      setStats({
+        totalSubmissions: 0,
+        contestRating: 0,
+        currentStreak: 0,
+        upcomingContests: 0,
+        totalSolved: 0,
+        easySolved: 0,
+        mediumSolved: 0,
+        hardSolved: 0,
+        averageTime: 0,
+        favoriteLanguage: "Python",
+      })
     } finally {
       setLoading(false)
     }
