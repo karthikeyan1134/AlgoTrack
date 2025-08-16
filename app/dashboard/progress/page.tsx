@@ -6,6 +6,10 @@ import DifficultyDistributionChart from "@/components/charts/difficulty-distribu
 import PlatformPerformanceChart from "@/components/charts/platform-performance-chart"
 import RatingProgressChart from "@/components/charts/rating-progress-chart"
 import CategoryHeatmap from "@/components/charts/category-heatmap"
+import ProgressOverview from "@/components/progress-overview"
+import GoalTracker from "@/components/goal-tracker"
+import StreakTracker from "@/components/streak-tracker"
+import ProblemProgressTable from "@/components/problem-progress-table"
 
 export default async function ProgressPage() {
   const supabase = createClient()
@@ -29,6 +33,13 @@ export default async function ProgressPage() {
           </div>
 
           <div className="space-y-8">
+            <ProgressOverview />
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              <GoalTracker />
+              <StreakTracker />
+            </div>
+
             {/* Submission trends */}
             <SubmissionTrendChart />
 
@@ -43,6 +54,8 @@ export default async function ProgressPage() {
 
             {/* Category heatmap */}
             <CategoryHeatmap />
+
+            <ProblemProgressTable />
           </div>
         </div>
       </div>

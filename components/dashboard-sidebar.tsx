@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { BarChart3, Calendar, Code2, Home, Settings, Trophy, User, LogOut, Menu, X } from "lucide-react"
 import { signOut } from "@/lib/actions"
+import NotificationCenter from "@/components/notification-center"
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: Home },
@@ -44,9 +45,13 @@ export default function DashboardSidebar({ user }: DashboardSidebarProps) {
       >
         <div className="flex flex-col h-full">
           {/* Logo */}
-          <div className="flex items-center px-6 py-4 border-b border-gray-200">
-            <Code2 className="h-8 w-8 text-blue-600" />
-            <span className="ml-2 text-xl font-bold text-gray-900">CP Tracker</span>
+          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+            <div className="flex items-center">
+              <Code2 className="h-8 w-8 text-blue-600" />
+              <span className="ml-2 text-xl font-bold text-gray-900">CP Tracker</span>
+            </div>
+            {/* Notification Center */}
+            <NotificationCenter />
           </div>
 
           {/* Navigation */}
